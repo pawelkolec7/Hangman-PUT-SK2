@@ -18,6 +18,15 @@ def update_image(image_label, lives, image_folder):
     else:
         print(f"Image {image_path} not found!")
 
+def update_text_area(label, new_message):
+    updated_text = new_message
+    label.config(text=updated_text)
+    # Opcjonalnie przycięcie tekstu, jeśli jest za długi
+    max_lines = 15
+    lines = updated_text.split("\n")
+    if len(lines) > max_lines:
+        label.config(text="\n".join(lines[-max_lines:]))
+
 def parse_lives_from_message(message):
     """Wyciąga liczbę żyć z wiadomości serwera."""
     match = re.search(r"You have (\d+) lives left", message)
@@ -39,13 +48,12 @@ def send_letter(sock, letter):
     """Wysyła wybraną literę do serwera."""
     sock.sendall(letter.encode('utf-8'))
 
-def send_join(sock, join_button, message_entry):
+def send_join(sock, join_button):
     """Funkcja wysyłająca komendę JOIN."""
     sock.sendall("join".encode('utf-8'))
     join_button.config(state=tk.DISABLED)  # Dezaktywuj przycisk po kliknięciu
-    message_entry.grid_remove()  # Ukryj pole do wpisywania wiadomości
 
-def receive_messages(sock, text_area, player_list_area, join_button, image_label, image_folder, pass_label):
+def receive_messages(sock, text_area, player_list_area, join_button, image_label, image_folder, pass_label,message_entry):
     """Funkcja obsługująca odbieranie wiadomości od serwera."""
     while True:
         try:
@@ -75,15 +83,16 @@ def receive_messages(sock, text_area, player_list_area, join_button, image_label
                     player_list_area.config(state=tk.DISABLED)
 
                     if remaining_message.strip():
-                        text_area.config(state=tk.NORMAL)
-                        text_area.insert(tk.END, remaining_message + "\n")
-                        text_area.config(state=tk.DISABLED)
-                        text_area.see(tk.END)
+                        if "Round over!" in message:
+                            update_text_area(text_area, remaining_message)
+                        elif "Correct! Your current word:" in message:
+                            update_text_area(text_area, "Correct")
+                        elif "Game is starting! Your word:" in message:
+                            update_text_area(text_area, "Game is starting")
+                        else:
+                            update_text_area(text_area, remaining_message)
                 else:
-                    text_area.config(state=tk.NORMAL)
-                    text_area.insert(tk.END, message + "\n")
-                    text_area.config(state=tk.DISABLED)
-                    text_area.see(tk.END)
+                    update_text_area(text_area, message)
 
                 if "Hasło" in message:
                     lines = message.split("\n")
@@ -105,6 +114,7 @@ def receive_messages(sock, text_area, player_list_area, join_button, image_label
 
                 if "Welcome to the lobby" in message:
                     join_button.config(state=tk.NORMAL)
+                    message_entry.grid_remove()  # Ukryj pole do wpisywania wiadomości
                     update_image(image_label, 0, image_folder)
             else:
                 break
@@ -133,11 +143,32 @@ def main():
         print(f"Folder {image_folder} not found!")
         return
 
-    text_area = scrolledtext.ScrolledText(root, state=tk.DISABLED, wrap=tk.WORD, height=15, width=50)
-    text_area.grid(row=0, column=0, padx=10, pady=10)
+    text_area = tk.Label(root, text="", wraplength=400, anchor="center", width=50, height=15)
+    text_area.grid(row=0, column=0, padx=10, pady=10, sticky="nw")
+    text_area.config(fg="black", font=("Helvetica", 12, "bold"))
 
     player_list_area = scrolledtext.ScrolledText(root, state=tk.DISABLED, wrap=tk.WORD, height=10, width=30)
     player_list_area.grid(row=0, column=1, padx=10, pady=10)
+    
+    # Tworzymy ramkę dla pola tekstowego
+    player_list_frame = tk.Frame(root, bg="#000000", bd=2, relief="groove")
+    player_list_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+
+    # Pole tekstowe z dostosowanym stylem
+    player_list_area = scrolledtext.ScrolledText(
+        player_list_frame,
+        state=tk.DISABLED,
+        wrap=tk.WORD,
+        height=10,
+        width=30,
+        font=("Helvetica", 12),
+        bg="#CCCCCC",  # Kolor tła
+        fg="#000000",  # Kolor tekstu
+        relief="flat",  # Bez widocznych krawędzi
+        highlightthickness=0,  # Wyłącz podświetlenie
+    )
+    player_list_area.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
 
     pass_label = tk.Label(root)
     pass_label.grid(row=1, column=0, columnspan=2, pady=10)
@@ -154,7 +185,7 @@ def main():
 
     message_entry.bind("<Return>", lambda event: send_message(client_socket, message_entry))
 
-    join_button = tk.Button(root, text="DOŁĄCZ DO GRY", state=tk.DISABLED, command=lambda: send_join(client_socket, join_button,message_entry))
+    join_button = tk.Button(root, text="DOŁĄCZ DO GRY", state=tk.DISABLED, command=lambda: send_join(client_socket, join_button))
     join_button.grid(row=3, column=1, columnspan=2, pady=10)
 
     keyboard_frame = tk.Frame(root)
@@ -174,7 +205,7 @@ def main():
 
     threading.Thread(
         target=receive_messages,
-        args=(client_socket, text_area, player_list_area, join_button, image_label, image_folder, pass_label),
+        args=(client_socket, text_area, player_list_area, join_button, image_label, image_folder, pass_label,message_entry),
         daemon=True
     ).start()
 
