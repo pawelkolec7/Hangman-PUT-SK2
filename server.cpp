@@ -81,6 +81,7 @@ void end_round() {
     // Przenieś graczy do poczekalni, jeśli gra nie może być kontynuowana
     if (game_lobby.size() < 2) {
         std::cout << "Not enough players for the next round.\n";
+        player_points.clear();
         while (!game_lobby.empty()) {
             int player_fd = game_lobby.back();
             game_lobby.pop_back();
@@ -233,6 +234,10 @@ void handle_client_message(int client_fd) {
             clients.erase(client_fd);
             std::cout << "Client " << nick << " disconnected.\n";
 
+            if (player_points.count(client_fd)) {
+                player_points[client_fd] = 0;
+            }
+    
             // Remove from game lobby or waiting room if applicable
             game_lobby.erase(std::remove(game_lobby.begin(), game_lobby.end(), client_fd), game_lobby.end());
             std::queue<int> temp_queue;
@@ -303,7 +308,7 @@ void handle_client_message(int client_fd) {
             close(client_fd);
             std::cout << "Client " << nick << " exited.\n";
         } else if (message.size() == 1 && isalpha(message[0])) {
-            if (game_lobby.size() < 2) {
+            if (game_lobby.size() < 2 && game_in_progress == false) {
                 std::string response = "You cannot play alone. Please wait for more players to join.\n";
                 send(client_fd, response.c_str(), response.size(), 0);
                 std::cout << "Client " << clients[client_fd] << " tried to guess a letter but is alone in the lobby.\n";
