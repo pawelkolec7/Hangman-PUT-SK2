@@ -180,7 +180,7 @@ void handle_guess(int client_fd, char guess) {
 
     if (correct) {
         send_player_list();
-        std::string response = "Correct! Your current word:\n Hasło: " + state + "\n";
+        std::string response = "Correct! Your current word:\n Password: " + state + "\n";
         send(client_fd, response.c_str(), response.size(), 0);
         std::cout << "Player " << clients[client_fd] << " guessed correctly: " << guess << "\n";
 
