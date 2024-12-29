@@ -2,9 +2,16 @@ import socket
 import threading
 import tkinter as tk
 from tkinter import scrolledtext
+from tkinter import simpledialog
 from PIL import Image, ImageTk
 import os
 import re
+import sys
+
+def restart_application():
+    """Restartuje aplikację."""
+    python = sys.executable  # Ścieżka do interpretera Pythona
+    os.execl(python, python, *sys.argv)  # Uruchamia ponownie bieżący skrypt
 
 def update_image(image_label, lives, image_folder):
     """Aktualizuje obraz w GUI w zależności od liczby żyć."""
@@ -35,7 +42,7 @@ def parse_lives_from_message(message):
     return None
 
 def add_spacing(text):
-    return " ".join(text)  # Dodaje spację między każdą literą
+    return " ".join(text)
 
 def send_message(sock, message_entry):
     """Funkcja obsługująca wysyłanie wiadomości do serwera."""
@@ -53,7 +60,7 @@ def send_join(sock, join_button):
     sock.sendall("join".encode('utf-8'))
     join_button.config(state=tk.DISABLED)  # Dezaktywuj przycisk po kliknięciu
 
-def receive_messages(sock, text_area, player_list_area, join_button, image_label, image_folder, pass_label,message_entry):
+def receive_messages(sock, text_area, player_list_area, join_button, image_label, image_folder, pass_label,message_entry,player_name_area):
     """Funkcja obsługująca odbieranie wiadomości od serwera."""
     while True:
         try:
@@ -92,6 +99,9 @@ def receive_messages(sock, text_area, player_list_area, join_button, image_label
                         else:
                             update_text_area(text_area, remaining_message)
                 else:
+                    if "Welcome to the lobby," in message:
+                        player_name = message.split(",")[1].strip().strip(".")  # Wyodrębnij nazwę gracza
+                        player_name_area.config(text=f"Player: {player_name}")
                     update_text_area(text_area, message)
 
                 if "Hasło" in message:
@@ -129,8 +139,15 @@ def main():
     root = tk.Tk()
     root.title("Hangman Client")
 
-    server_address = ('127.0.0.1', 1235)
-
+    adres = simpledialog.askstring("Adres IP", "Podaj adres IP serwera:", initialvalue="127.0.0.1")
+    if not adres:
+        print("Adres IP nie został podany.")
+        return
+    port = simpledialog.askinteger("Port", "Podaj numer portu serwera:", initialvalue=1235)
+    if not port:
+        print("Numer portu nie został podany.")
+        return
+    server_address = (adres, port)
     try:
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_socket.connect(server_address)
@@ -144,15 +161,19 @@ def main():
         return
 
     text_area = tk.Label(root, text="", wraplength=400, anchor="center", width=50, height=15)
-    text_area.grid(row=0, column=0, padx=10, pady=10, sticky="nw")
+    text_area.grid(row=1, column=0, padx=10, pady=10, sticky="nw")
     text_area.config(fg="black", font=("Helvetica", 12, "bold"))
 
+    player_name_area = tk.Label(root,text="Gracz")
+    player_name_area.grid(row=0, column=0, columnspan=2, pady=10)
+    player_name_area.config(fg="black", font=("Helvetica", 24, "bold"))
+
     player_list_area = scrolledtext.ScrolledText(root, state=tk.DISABLED, wrap=tk.WORD, height=10, width=30)
-    player_list_area.grid(row=0, column=1, padx=10, pady=10)
+    player_list_area.grid(row=1, column=1, padx=10, pady=10)
     
     # Tworzymy ramkę dla pola tekstowego
     player_list_frame = tk.Frame(root, bg="#000000", bd=2, relief="groove")
-    player_list_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+    player_list_frame.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
 
     # Pole tekstowe z dostosowanym stylem
     player_list_area = scrolledtext.ScrolledText(
@@ -171,25 +192,31 @@ def main():
 
 
     pass_label = tk.Label(root)
-    pass_label.grid(row=1, column=0, columnspan=2, pady=10)
+    pass_label.grid(row=2, column=0, columnspan=2, pady=10)
     pass_label.config(fg="black", font=("Helvetica", 24, "bold"))
 
     image_label = tk.Label(root)
-    image_label.grid(row=3, column=0, columnspan=1, pady=10)
+    image_label.grid(row=4, column=0, columnspan=1, pady=10)
 
     message_entry = tk.Entry(root, width=40)
-    message_entry.grid(row=2, column=0, padx=10, pady=10)
+    message_entry.grid(row=3, column=0, padx=10, pady=10)
 
     send_button = tk.Button(root, text="WYŚLIJ", command=lambda: send_message(client_socket, message_entry))
-    send_button.grid(row=2, column=1, padx=10, pady=10)
+    send_button.grid(row=3, column=1, padx=10, pady=10)
+
+    exit_button = tk.Button(root,text="ZMIEŃ SERWER",command=restart_application)
+    exit_button.grid(row=3, column=2, padx=10, pady=10)
+
+    exit_button2 = tk.Button(root,text="WYJDŹ",command=root.destroy)
+    exit_button2.grid(row=4, column=2, padx=10, pady=10)
 
     message_entry.bind("<Return>", lambda event: send_message(client_socket, message_entry))
 
     join_button = tk.Button(root, text="DOŁĄCZ DO GRY", state=tk.DISABLED, command=lambda: send_join(client_socket, join_button))
-    join_button.grid(row=3, column=1, columnspan=2, pady=10)
+    join_button.grid(row=4, column=1, columnspan=2, pady=10)
 
     keyboard_frame = tk.Frame(root)
-    keyboard_frame.grid(row=4, column=0, columnspan=2, pady=10)
+    keyboard_frame.grid(row=5, column=0, columnspan=2, pady=10)
 
     for i, letter in enumerate("QWERTYUIOPASDFGHJKLZXCVBNM"):
         if i < 10:
@@ -205,7 +232,7 @@ def main():
 
     threading.Thread(
         target=receive_messages,
-        args=(client_socket, text_area, player_list_area, join_button, image_label, image_folder, pass_label,message_entry),
+        args=(client_socket, text_area, player_list_area, join_button, image_label, image_folder, pass_label,message_entry,player_name_area),
         daemon=True
     ).start()
 
