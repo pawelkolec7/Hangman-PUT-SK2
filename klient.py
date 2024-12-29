@@ -104,11 +104,11 @@ def receive_messages(sock, text_area, player_list_area, join_button, image_label
                         player_name_area.config(text=f"Player: {player_name}")
                     update_text_area(text_area, message)
 
-                if "Hasło" in message:
+                if "Password" in message:
                     lines = message.split("\n")
                     num_line = None
                     for i, line in enumerate(lines):
-                        if "Hasło" in line:
+                        if "Password" in line:
                             num_line = i
                             break
                     if num_line is not None:
@@ -164,7 +164,7 @@ def main():
     text_area.grid(row=1, column=0, padx=10, pady=10, sticky="nw")
     text_area.config(fg="black", font=("Helvetica", 12, "bold"))
 
-    player_name_area = tk.Label(root,text="Gracz")
+    player_name_area = tk.Label(root,text="Player")
     player_name_area.grid(row=0, column=0, columnspan=2, pady=10)
     player_name_area.config(fg="black", font=("Helvetica", 24, "bold"))
 
@@ -201,18 +201,18 @@ def main():
     message_entry = tk.Entry(root, width=40)
     message_entry.grid(row=3, column=0, padx=10, pady=10)
 
-    send_button = tk.Button(root, text="WYŚLIJ", command=lambda: send_message(client_socket, message_entry))
+    send_button = tk.Button(root, text="SEND", command=lambda: send_message(client_socket, message_entry))
     send_button.grid(row=3, column=1, padx=10, pady=10)
 
-    exit_button = tk.Button(root,text="ZMIEŃ SERWER",command=restart_application)
+    exit_button = tk.Button(root,text="SWITCH SERVER",command=restart_application)
     exit_button.grid(row=3, column=2, padx=10, pady=10)
 
-    exit_button2 = tk.Button(root,text="WYJDŹ",command=root.destroy)
+    exit_button2 = tk.Button(root,text="EXIT",command=root.destroy)
     exit_button2.grid(row=4, column=2, padx=10, pady=10)
 
     message_entry.bind("<Return>", lambda event: send_message(client_socket, message_entry))
 
-    join_button = tk.Button(root, text="DOŁĄCZ DO GRY", state=tk.DISABLED, command=lambda: send_join(client_socket, join_button))
+    join_button = tk.Button(root, text="JOIN GAME", state=tk.DISABLED, command=lambda: send_join(client_socket, join_button))
     join_button.grid(row=4, column=1, columnspan=2, pady=10)
 
     keyboard_frame = tk.Frame(root)
