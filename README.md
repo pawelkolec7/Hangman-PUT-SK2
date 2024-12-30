@@ -1,7 +1,7 @@
 # Hangman-PUT-SK2
 Kompilacja serwera:
 ##
-g++ server.cpp -0 server
+g++ server.cpp -o server
 ##
 Uruchomienie serwera (przykład)
 ##
