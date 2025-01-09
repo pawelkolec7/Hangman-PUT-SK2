@@ -15,6 +15,7 @@
 #include <ctime>
 #include <thread>
 #include <chrono>
+#include <fstream>
 
 #define MAX_EVENTS 10
 #define BUFFER_SIZE 1024
@@ -29,11 +30,26 @@ std::unordered_map<int, int> player_points; // socket -> points
 
 bool game_in_progress = false;
 bool send_list = false;
-std::vector<std::string> word_pool = {"tee","taee","teea","teae","teee"}; //to tylko przykładowe do testów
+std::vector<std::string> word_pool; //to tylko przykładowe do testów
 std::unordered_map<int, std::string> player_word; // socket -> current word
 std::unordered_map<int, std::string> player_state; // socket -> current state
 std::string round_winner;
 void start_game();
+
+void load_words_from_file(const std::string& filename, std::vector<std::string>& word_pool) {
+    std::ifstream file(filename);
+    if (!file) {
+        std::cerr <<"Error: Could not open file"<<filename<<std::endl;
+        return;
+    }
+    std::string line;
+    while (std::getline(file, line)) {
+        if (!line.empty()) {
+            word_pool.push_back(line);
+        }
+    }
+    file.close();
+}
 
 void reset_game_for_player(int client_fd) {
     player_word.erase(client_fd);
@@ -321,11 +337,14 @@ void handle_client_message(int client_fd) {
 }
 
 int main(int argc,char**argv) {
+
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == -1) {
         perror("socket");
         return 1;
     }
+
+    load_words_from_file("hasla.txt", word_pool);
 
     sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
