@@ -26,13 +26,8 @@ def update_image(image_label, lives, image_folder):
         print(f"Image {image_path} not found!")
 
 def update_text_area(label, new_message):
-    updated_text = new_message
+    updated_text = new_message[1:]
     label.config(text=updated_text)
-    # Opcjonalnie przycięcie tekstu, jeśli jest za długi
-    max_lines = 15
-    lines = updated_text.split("\n")
-    if len(lines) > max_lines:
-        label.config(text="\n".join(lines[-max_lines:]))
 
 def parse_lives_from_message(message):
     """Wyciąga liczbę żyć z wiadomości serwera."""
@@ -51,27 +46,29 @@ def send_message(sock, message_entry):
         sock.sendall(message.encode('utf-8'))
         message_entry.delete(0, tk.END)
 
-def send_letter(sock, letter):
-    """Wysyła wybraną literę do serwera."""
+def send_letter(sock, button):
+    """Wysyła wybraną literę do serwera i zmienia kolor przycisku."""
+    letter = button['text']
     sock.sendall(letter.encode('utf-8'))
+    button.config(state=tk.DISABLED) 
 
 def send_join(sock, join_button):
     """Funkcja wysyłająca komendę JOIN."""
     sock.sendall("join".encode('utf-8'))
     join_button.config(state=tk.DISABLED)  # Dezaktywuj przycisk po kliknięciu
 
-def receive_messages(sock, text_area, player_list_area, join_button, image_label, image_folder, pass_label,message_entry,player_name_area):
+def receive_messages(sock, text_area, player_list_area, join_button, image_label, image_folder, pass_label,message_entry,player_name_area,time_area,keyboard_frame):
     """Funkcja obsługująca odbieranie wiadomości od serwera."""
     while True:
         try:
             message = sock.recv(1024).decode('utf-8')
             if message:
-                if "Player List" in message:
+                if "$" in message:
                     lines = message.split("\n")
                     start_index = None
                     end_index = None
                     for i, line in enumerate(lines):
-                        if "Player List" in line:
+                        if "$" in line:
                             start_index = i
                         if line.strip() == "-----------" and start_index is not None:
                             end_index = i
@@ -88,43 +85,53 @@ def receive_messages(sock, text_area, player_list_area, join_button, image_label
                     player_list_area.delete(1.0, tk.END)
                     player_list_area.insert(tk.END, player_list + "\n")
                     player_list_area.config(state=tk.DISABLED)
-
+                    
                     if remaining_message.strip():
-                        if "Round over!" in message:
-                            update_text_area(text_area, remaining_message)
-                        elif "Correct! Your current word:" in message:
-                            update_text_area(text_area, "Correct")
-                        elif "Game is starting! Your word:" in message:
-                            update_text_area(text_area, "Game is starting")
-                        else:
-                            update_text_area(text_area, remaining_message)
+                        update_text_area(text_area, remaining_message)
                 else:
-                    if "Welcome to the lobby," in message:
+                    if "#Welcome to the lobby," in message:
                         player_name = message.split(",")[1].strip().strip(".")  # Wyodrębnij nazwę gracza
                         player_name_area.config(text=f"Player: {player_name}")
-                    update_text_area(text_area, message)
+                    if not "#Time" in message:
+                        update_text_area(text_area, message)
+                if "#Correct! Your current word:" in message:
+                    update_text_area(text_area, "#Correct")
+                if "#Game is starting!" in message:
+                            update_text_area(text_area, "#Game is starting")
+                            for button in keyboard_frame.winfo_children():
+                                button.config(state=tk.NORMAL)    
 
-                if "Password" in message:
+                if "@" in message:
                     lines = message.split("\n")
                     num_line = None
                     for i, line in enumerate(lines):
-                        if "Password" in line:
+                        if "@" in line:
                             num_line = i
                             break
                     if num_line is not None:
                         spaced_text = add_spacing(lines[num_line])
-                        pass_label.config(text=spaced_text)
+                        pass_label.config(text=spaced_text[1:])
+
+                if "#Time" in message:
+                    lines = message.split('\n')
+                    new_message = ''.join(lines[:1])
+                    new2_message = ''.join(lines[1:])
+                    update_text_area(time_area,new_message)
+                    if new2_message != '':
+                        update_text_area(text_area,new2_message)
 
                 lives = parse_lives_from_message(message)
                 if lives is not None:
                     update_image(image_label, lives + 1, image_folder)
 
-                if "Round over" in message:
+                if "#Round over" in message:
                     update_image(image_label, 0, image_folder)
+                    for button in keyboard_frame.winfo_children():
+                        button.config(state=tk.NORMAL)
 
-                if "Welcome to the lobby" in message:
+                if "#Welcome to the lobby" in message:
                     join_button.config(state=tk.NORMAL)
-                    message_entry.grid_remove()  # Ukryj pole do wpisywania wiadomości
+                    message_entry.grid_remove()
                     update_image(image_label, 0, image_folder)
             else:
                 break
@@ -168,7 +175,11 @@ def main():
     player_name_area.grid(row=0, column=0, columnspan=2, pady=10)
     player_name_area.config(fg="black", font=("Helvetica", 24, "bold"))
 
-    player_list_area = scrolledtext.ScrolledText(root, state=tk.DISABLED, wrap=tk.WORD, height=10, width=30)
+    time_area = tk.Label(root,text="Time")
+    time_area.grid(row=0, column=1, columnspan=2, pady=10)
+    time_area.config(fg="black", font=("Helvetica", 24, "bold"))
+
+    player_list_area = scrolledtext.ScrolledText(root, state=tk.DISABLED, wrap=tk.WORD, height=10, width=40)
     player_list_area.grid(row=1, column=1, padx=10, pady=10)
     
     # Tworzymy ramkę dla pola tekstowego
@@ -220,19 +231,21 @@ def main():
 
     for i, letter in enumerate("QWERTYUIOPASDFGHJKLZXCVBNM"):
         if i < 10:
-            button = tk.Button(keyboard_frame, text=letter, width=4, command=lambda l=letter: send_letter(client_socket, l))
+            button = tk.Button(keyboard_frame, text=letter, width=4)
             button.grid(row=0, column=i, padx=2, pady=2)
+            button.config(command=lambda b=button: send_letter(client_socket, b))
         elif i < 19:
-            button = tk.Button(keyboard_frame, text=letter, width=4, command=lambda l=letter: send_letter(client_socket, l))
+            button = tk.Button(keyboard_frame, text=letter, width=4)
             button.grid(row=1, column=i - 10, padx=2, pady=2)
+            button.config(command=lambda b=button: send_letter(client_socket, b))
         else:
-            button = tk.Button(keyboard_frame, text=letter, width=4, command=lambda l=letter: send_letter(client_socket, l))
+            button = tk.Button(keyboard_frame, text=letter, width=4)
             button.grid(row=2, column=i - 19, padx=2, pady=2)
-    
+            button.config(command=lambda b=button: send_letter(client_socket, b))
 
     threading.Thread(
         target=receive_messages,
-        args=(client_socket, text_area, player_list_area, join_button, image_label, image_folder, pass_label,message_entry,player_name_area),
+        args=(client_socket, text_area, player_list_area, join_button, image_label, image_folder, pass_label,message_entry,player_name_area,time_area,keyboard_frame),
         daemon=True
     ).start()
 
