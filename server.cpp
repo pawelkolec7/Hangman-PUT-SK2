@@ -30,7 +30,7 @@ std::unordered_map<int, int> player_points; // socket -> points
 
 bool game_in_progress = false;
 bool send_list = false;
-std::vector<std::string> word_pool; //to tylko przykładowe do testów
+std::vector<std::string> word_pool;
 std::unordered_map<int, std::string> player_word; // socket -> current word
 std::unordered_map<int, std::string> player_state; // socket -> current state
 std::string round_winner;
@@ -59,7 +59,7 @@ void reset_game_for_player(int client_fd) {
 }
 
 void send_player_list() {
-    std::string player_list = "Player List:\n";
+    std::string player_list = "$Player List:\n";
     for (int client_fd : game_lobby) {
         player_list += clients[client_fd] + ": Lives=" + std::to_string(player_lives[client_fd]) +
                        ", Points=" + std::to_string(player_points[client_fd]) + "\n";
@@ -81,12 +81,12 @@ void end_round() {
         int winner_fd = nicknames[round_winner];
         player_points[winner_fd] += 1; // Dodaj punkt zwycięzcy
         for (int client_fd : game_lobby) {
-            std::string message = "Round over! " + round_winner + " wins this round!\n";
+            std::string message = "#Round over! " + round_winner + " wins this round!. Correct password is: " + player_word[client_fd] + "\n";
             send(client_fd, message.c_str(), message.size(), 0);
         }
     } else {
         for (int client_fd : game_lobby) {
-            std::string message = "Round over! No winner this time.\n";
+            std::string message = "#Round over! No winner this time. Correct password is: " + player_word[client_fd] + "\n";
             send(client_fd, message.c_str(), message.size(), 0);
         }
     }
@@ -95,13 +95,13 @@ void end_round() {
 
     // Przenieś graczy do poczekalni, jeśli gra nie może być kontynuowana
     if (game_lobby.size() < 2) {
-        std::cout << "Not enough players for the next round.\n";
+        std::cout << "#Not enough players for the next round.\n";
         player_points.clear();
         while (!game_lobby.empty()) {
             int player_fd = game_lobby.back();
             game_lobby.pop_back();
             waiting_room.push(player_fd);
-            send(player_fd, "Moving to the waiting room.\n", 28, 0);
+            send(player_fd, "#Moving to the waiting room.\n", 28, 0);
         }
 
         // Przenieś graczy z poczekalni, jeśli jest ich wystarczająco dużo
@@ -109,24 +109,24 @@ void end_round() {
             int player_fd = waiting_room.front();
             waiting_room.pop();
             game_lobby.push_back(player_fd);
-            send(player_fd, "You have been moved back to the game lobby.\n", 44, 0);
+            send(player_fd, "#You have been moved back to the game lobby.\n", 44, 0);
         }
 
         if (game_lobby.size() < 2) {
-            std::cout << "Still not enough players for the next round. Waiting...\n";
+            std::cout << "#Still not enough players for the next round. Waiting...\n";
             return;
         }
     }
 
     // Automatyczne wznowienie gry po 3 sekundach
-    std::cout << "Next round will start in 3 seconds...\n";
+    std::cout << "#Next round will start in 3 seconds...\n";
     std::this_thread::sleep_for(std::chrono::seconds(5)); // Czekaj 3 sekundy
 
     if (game_lobby.size() >= 2) {
-        std::cout << "Starting the next round.\n";
+        std::cout << "#Starting the next round.\n";
         start_game();
     } else {
-        std::cout << "Not enough players for the next round.\n";
+        std::cout << "#Not enough players for the next round.\n";
     }
 }
 
@@ -137,7 +137,7 @@ void start_game() {
         int player_fd = waiting_room.front();
         waiting_room.pop();
         game_lobby.push_back(player_fd);
-        send(player_fd, "You have been moved back to the game lobby.\n", 44, 0);
+        send(player_fd, "#You have been moved back to the game lobby.\n", 44, 0);
     }
 
     if (game_lobby.size() >= 2) {
@@ -151,25 +151,29 @@ void start_game() {
             player_state[client_fd] = std::string(word.size(), '_');
             player_lives[client_fd] = 10;
 
-            std::string response = "Game is starting! Your word: " + player_state[client_fd] + "\n";
-            std::string response2 = "Password: " + player_state[client_fd] + "\n\n";
+            std::string response = "#Game is starting! Your word: " + player_state[client_fd] + "\n";
+            std::string response2 = "@Password: " + player_state[client_fd] + "\n\n";
             send(client_fd, response.c_str(), response.size(), 0);
             send(client_fd, response2.c_str(), response2.size(), 0);
         }
-        std::cout << "Game started with " << game_lobby.size() << " players.\n";
+        std::cout << "#Game started with " << game_lobby.size() << " players.\n";
         send_player_list();
         //Timer dla rundy
         std::thread([]() {
-            int remaining_time = 20; // Czas trwania rundy w sekundach - 20 sekund do testów, docelowo będzie minuta
+            int remaining_time = 60; // Czas trwania rundy w sekundach - 20 sekund do testów, docelowo będzie minuta
 
             while (remaining_time > 0 && game_in_progress) {
-                std::cout << "Time remaining: " << remaining_time << " seconds.\n";
+                std::cout << "#Time left: " << remaining_time << " seconds.\n";
                 std::this_thread::sleep_for(std::chrono::seconds(1));
+                for (int client_fd : game_lobby){
+                    std::string time_message = "#Time left: " + std::to_string(remaining_time-1) + "\n";
+                    send(client_fd,time_message.c_str(),time_message.size(),0);
+                }
                 remaining_time--;
             }
 
             if (game_in_progress) {
-                std::cout << "Time's up! Ending round.\n";
+                std::cout << "#Time's up! Ending round.\n";
                 end_round();
             }
         }).detach();
@@ -178,7 +182,7 @@ void start_game() {
 
 void handle_guess(int client_fd, char guess) {
     if (eliminated_players.count(client_fd)) {
-        std::string response = "You have been eliminated. Wait for the next round.\n";
+        std::string response = "#You have been eliminated. Wait for the next round.\n";
         send(client_fd, response.c_str(), response.size(), 0);
         return;
     }
@@ -196,9 +200,9 @@ void handle_guess(int client_fd, char guess) {
 
     if (correct) {
         send_player_list();
-        std::string response = "Correct! Your current word:\n Password: " + state + "\n";
+        std::string response = "#Correct! Your current word:\n@Password: " + state + "\n";
         send(client_fd, response.c_str(), response.size(), 0);
-        std::cout << "Player " << clients[client_fd] << " guessed correctly: " << guess << "\n";
+        std::cout << "#Player " << clients[client_fd] << " guessed correctly: " << guess << "\n";
 
         // Check if the player has guessed their word
         if (state == word) {
@@ -209,15 +213,15 @@ void handle_guess(int client_fd, char guess) {
     } else {
         player_lives[client_fd]--;
         send_player_list();
-        std::string response = "Wrong guess! You have " + std::to_string(player_lives[client_fd]) + " lives left.\n";
+        std::string response = "#Wrong guess! You have " + std::to_string(player_lives[client_fd]) + " lives left.\n";
         send(client_fd, response.c_str(), response.size(), 0);
-        std::cout << "Player " << clients[client_fd] << " guessed incorrectly: " << guess << "\n";
+        std::cout << "#Player " << clients[client_fd] << " guessed incorrectly: " << guess << "\n";
 
         if (player_lives[client_fd] <= 0) {
             eliminated_players.insert(client_fd);
             std::string elimination_message = "You have been eliminated. Wait for the next round.\n";
             send(client_fd, elimination_message.c_str(), elimination_message.size(), 0);
-            std::cout << "Player " << clients[client_fd] << " has been eliminated.\n";
+            std::cout << "#Player " << clients[client_fd] << " has been eliminated.\n";
 
             //Sprawdzamy czy wszyscy zostali wyeliminowani
             bool all_eliminated = true;
@@ -229,7 +233,7 @@ void handle_guess(int client_fd, char guess) {
             }
 
             if (all_eliminated) {
-                std::cout << "All players eliminated. Ending round.\n";
+                std::cout << "#All players eliminated. Ending round.\n";
                 end_round();
             }
         }
@@ -247,7 +251,7 @@ void handle_client_message(int client_fd) {
             std::string nick = clients[client_fd];
             nicknames.erase(nick);
             clients.erase(client_fd);
-            std::cout << "Client " << nick << " disconnected.\n";
+            std::cout << "#Client " << nick << " disconnected.\n";
 
             if (player_points.count(client_fd)) {
                 player_points[client_fd] = 0;
@@ -273,29 +277,32 @@ void handle_client_message(int client_fd) {
     message.erase(message.find_last_not_of("\r\n") + 1); 
 
     if (clients.find(client_fd) == clients.end()) {
-        // Nick gracza
-        if (nicknames.count(message)) {
-            std::string response = "Nickname already taken. Choose another:\n";
+        if (message.find_first_of("#$@") != std::string::npos) {
+            std::string response = "#Nickname contains invalid characters. Choose another:\n";
+            send(client_fd, response.c_str(), response.size(), 0);
+        }
+        else if (nicknames.count(message)) {
+            std::string response = "#Nickname already taken. Choose another:\n";
             send(client_fd, response.c_str(), response.size(), 0);
         } else {
             clients[client_fd] = message;
             nicknames[message] = client_fd;
-            std::string response = "Welcome to the lobby, " + message + ".\n";
+            std::string response = "#Welcome to the lobby, " + message + ".\n";
             send(client_fd, response.c_str(), response.size(), 0);
-            std::cout << "Client " << message << " connected.\n";
+            std::cout << "#Client " << message << " connected.\n";
         }
     } else {
         if (message == "join") {
             if (game_in_progress) {
                 waiting_room.push(client_fd);
-                std::string response = "Game is in progress. You will join the next round.\n";
+                std::string response = "#Game is in progress. You will join the next round.\n";
                 send(client_fd, response.c_str(), response.size(), 0);
-                std::cout << "Client " << clients[client_fd] << " is waiting for the next round.\n";
+                std::cout << "#Client " << clients[client_fd] << " is waiting for the next round.\n";
             } else {
                 game_lobby.push_back(client_fd);
-                std::string response = "You joined the game lobby. Waiting for more players...\n";
+                std::string response = "#You joined the game lobby. Waiting for more players...\n";
                 send(client_fd, response.c_str(), response.size(), 0);
-                std::cout << "Client " << clients[client_fd] << " joined the game lobby.\n";
+                std::cout << "#Client " << clients[client_fd] << " joined the game lobby.\n";
 
                 if (game_lobby.size() >= 2) {
                     start_game();
@@ -317,20 +324,20 @@ void handle_client_message(int client_fd) {
             }
             waiting_room = temp_queue;
 
-            std::string response = "Goodbye!\n";
+            std::string response = "#Goodbye!\n";
             send(client_fd, response.c_str(), response.size(), 0);
             close(client_fd);
-            std::cout << "Client " << nick << " exited.\n";
+            std::cout << "#Client " << nick << " exited.\n";
         } else if (message.size() == 1 && isalpha(message[0])) {
             if (game_lobby.size() < 2 && game_in_progress == false) {
-                std::string response = "You cannot play alone. Please wait for more players to join.\n";
+                std::string response = "#You cannot play alone. Please wait for more players to join.\n";
                 send(client_fd, response.c_str(), response.size(), 0);
-                std::cout << "Client " << clients[client_fd] << " tried to guess a letter but is alone in the lobby.\n";
+                std::cout << "#Client " << clients[client_fd] << " tried to guess a letter but is alone in the lobby.\n";
             } else {
                 handle_guess(client_fd, message[0]);
             }
         } else {
-            std::string response = "Unknown command. Use 'join', 'exit', or guess a letter.\n";
+            std::string response = "#Unknown command. Use 'join', 'exit', or guess a letter.\n";
             send(client_fd, response.c_str(), response.size(), 0);
         }
     }
@@ -348,8 +355,8 @@ int main(int argc,char**argv) {
 
     sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = inet_addr(argv[1]);
-    server_addr.sin_port = htons(atoi(argv[2]));
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(atoi(argv[1]));
 
     if (bind(server_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
         perror("bind");
@@ -408,7 +415,7 @@ int main(int argc,char**argv) {
                     continue;
                 }
 
-                std::string welcome = "Welcome! Please enter your nickname:\n";
+                std::string welcome = "#Welcome! Please enter your nickname:\n";
                 send(client_fd, welcome.c_str(), welcome.size(), 0);
             } else {
                 handle_client_message(events[i].data.fd);
@@ -418,12 +425,12 @@ int main(int argc,char**argv) {
         // Sprawdzamy czy gra sie zakonczyla
         if (game_in_progress && game_lobby.empty()) {
             game_in_progress = false;
-            std::cout << "Game ended. Moving players from waiting room to game lobby.\n";
+            std::cout << "#Game ended. Moving players from waiting room to game lobby.\n";
             while (!waiting_room.empty() && game_lobby.size() < 2) {
                 int client_fd = waiting_room.front();
                 waiting_room.pop();
                 game_lobby.push_back(client_fd);
-                std::string response = "You joined the game lobby. Waiting for more players...\n";
+                std::string response = "#You joined the game lobby. Waiting for more players...\n";
                 send(client_fd, response.c_str(), response.size(), 0);
             }
             if (game_lobby.size() >= 2) {
