@@ -3,17 +3,17 @@ Adam Nowacki 155838 Paweł Kolec 155873
 
 Aby uruchomić grę należy:
 
-1.Pobrać repozytorium
+1. Pobrać repozytorium
 
-2.W katalogu z pobranym repozytorium uruchomić konsolę
+2. W katalogu z pobranym repozytorium uruchomić konsolę
 
-3.Wpisać komendy
+3. Wpisać komendy
 
   make
   
   make install_client
   
-4.Uruchomić serwer za pomocą komendy ./server
+4. Uruchomić serwer za pomocą komendy ./server
 
-5.Uruchomić klienta za pomocą python3 klient.py
+5. Uruchomić klienta za pomocą python3 klient.py
 
