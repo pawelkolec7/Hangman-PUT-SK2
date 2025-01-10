@@ -9,9 +9,9 @@ Aby uruchomić grę należy:
 
 3. Wpisać komendy
 
-  make
+    make
   
-  make install_client
+    make install_client
   
 4. Uruchomić serwer za pomocą komendy ./server
 
