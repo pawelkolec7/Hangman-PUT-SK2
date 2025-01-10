@@ -345,6 +345,11 @@ void handle_client_message(int client_fd) {
 
 int main(int argc,char**argv) {
 
+    if(argc<1){
+      std::cout<< "Brak numeru portu!";
+      return 0;
+    }
+
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == -1) {
         perror("socket");
