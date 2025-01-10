@@ -16,15 +16,17 @@
 #include <thread>
 #include <chrono>
 #include <fstream>
+#include <fcntl.h>
 
 #define MAX_EVENTS 10
 #define BUFFER_SIZE 1024
+#define PORT 1235
 
 std::unordered_map<int, std::string> clients; // socket -> nick
 std::unordered_map<std::string, int> nicknames; // nick -> socket
 std::vector<int> game_lobby; 
 std::queue<int> waiting_room;
-std::unordered_map<int, int> player_lives; // Player -> remaining lives
+std::unordered_map<int, int> player_lives; // socket -> remaining lives
 std::unordered_set<int> eliminated_players;
 std::unordered_map<int, int> player_points; // socket -> points
 
@@ -35,6 +37,17 @@ std::unordered_map<int, std::string> player_word; // socket -> current word
 std::unordered_map<int, std::string> player_state; // socket -> current state
 std::string round_winner;
 void start_game();
+
+void setNonBlocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) {
+        perror("fcntl");
+        return;
+    }
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        perror("fcntl");
+    }
+}
 
 void load_words_from_file(const std::string& filename, std::vector<std::string>& word_pool) {
     std::ifstream file(filename);
@@ -76,7 +89,6 @@ void end_round() {
     game_in_progress = false;
     send_list = false;
     
-
     if (!round_winner.empty()) {
         int winner_fd = nicknames[round_winner];
         player_points[winner_fd] += 1; // Dodaj punkt zwycięzcy
@@ -118,9 +130,8 @@ void end_round() {
         }
     }
 
-    // Automatyczne wznowienie gry po 3 sekundach
-    std::cout << "#Next round will start in 3 seconds...\n";
-    std::this_thread::sleep_for(std::chrono::seconds(5)); // Czekaj 3 sekundy
+    std::cout << "#Next round will start in 5 seconds...\n";
+    std::this_thread::sleep_for(std::chrono::seconds(5));
 
     if (game_lobby.size() >= 2) {
         std::cout << "#Starting the next round.\n";
@@ -132,7 +143,7 @@ void end_round() {
 
 
 void start_game() {
-    // Przenieś graczy z poczekalni, jeśli jest ich wystarczająco dużo
+    // Przenieś graczy z poczekalni
     while (!waiting_room.empty()) {
         int player_fd = waiting_room.front();
         waiting_room.pop();
@@ -160,7 +171,7 @@ void start_game() {
         send_player_list();
         //Timer dla rundy
         std::thread([]() {
-            int remaining_time = 60; // Czas trwania rundy w sekundach - 20 sekund do testów, docelowo będzie minuta
+            int remaining_time = 60;
 
             while (remaining_time > 0 && game_in_progress) {
                 std::cout << "#Time left: " << remaining_time << " seconds.\n";
@@ -343,12 +354,8 @@ void handle_client_message(int client_fd) {
     }
 }
 
-int main(int argc,char**argv) {
+int main() {
 
-    if(argc<1){
-      std::cout<< "Brak numeru portu!";
-      return 0;
-    }
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == -1) {
@@ -361,7 +368,7 @@ int main(int argc,char**argv) {
     sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(atoi(argv[1]));
+    server_addr.sin_port = htons(PORT);
 
     if (bind(server_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
         perror("bind");
@@ -412,6 +419,7 @@ int main(int argc,char**argv) {
                     continue;
                 }
 
+                setNonBlocking(client_fd);
                 event.events = EPOLLIN;
                 event.data.fd = client_fd;
                 if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &event) == -1) {
@@ -427,7 +435,6 @@ int main(int argc,char**argv) {
             }
         }
 
-        // Sprawdzamy czy gra sie zakonczyla
         if (game_in_progress && game_lobby.empty()) {
             game_in_progress = false;
             std::cout << "#Game ended. Moving players from waiting room to game lobby.\n";
