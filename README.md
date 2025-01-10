@@ -5,7 +5,7 @@ Aby uruchomić grę należy:
 
 1. Pobrać repozytorium
 
-2. W katalogu z pobranym repozytorium uruchomić konsolę
+2. W katalogu z pobranym repozytorium uruchomić terminal
 
 3. Wpisać komendy
 
